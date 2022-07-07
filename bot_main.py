@@ -3,7 +3,8 @@ import telebot
 from telebot import types
 import coin_module
 import tools_module
-
+import bot_controls
+import shelve
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s_%(levelname)s: %(message)s')
 
@@ -14,34 +15,29 @@ bot = telebot.TeleBot(tools_module.get_token()["something_unimportant"])
 
 @bot.message_handler(commands=["start"])
 def start(m):
-    # Добавляем две кнопки
-#    btn1=telebot.types.KeyboardButton("/settings")
-#    btn2=telebot.types.KeyboardButton("/run")
-    # Настраиваем клавиатуру
-#    kb=telebot.types.ReplyKeyboardMarkup(resize_keyboard=True,one_time_keyboard=True)
-    # Добавляем кнопки в клавиатуру
-#    kb.add(btn1)
-#    kb.add(btn2)
-    bot.send_message(m.chat.id,'Бот ослеживает котировки.\nНажмите /run для запуска.\nНажмите /settings для настроек.')
-# Грамотно реализовать кнопки
-@bot.message_handler(commands=['button'])
-def button_message(m):
-    btn1=types.KeyboardButton("/settings")
-    btn2=types.KeyboardButton("/run")
-    # Настраиваем клавиатуру
-    markup=types.ReplyKeyboardMarkup(resize_keyboard=True)
-    # Добавляем кнопки в клавиатуру
-    markup.add(btn1)
-    markup.add(btn2)
-    bot.send_message(m.chat.id,'test', reply_markup=markup)
+    bot.send_message(m.chat.id,'Вас приветсвует бот для отслеживания котировок!')
+    bot_controls.add_keyboard(m, bot)
+
 
 @bot.message_handler(content_types=["text"])
 def check_quotes(m):
     if m.text.strip() == '/run':
+        with shelve.open('temp/tempData',flag="c") as shelFile:
+            is_check_coin_running=True
+            shelFile['is_check_coin_running']=is_check_coin_running
+
         bot.send_message(m.chat.id, 'Бот начал отслеживать котировки')
         coin_module.update_coin_list(m, bot)
-
-    elif m.text.strip() == "/settings":  # реализовать изменение конфига
+    
+    elif m.text.strip() =='/stop':
+        with shelve.open('temp/tempData',flag="c") as shelFile:
+            is_check_coin_running=False
+            shelFile['is_check_coin_running']=is_check_coin_running
+        
+        bot.send_message(m.chat.id, 'Бот перестал отслеживать котировки')
+        coin_module.running_state(is_running=False)
+    
+    elif m.text.strip() == "/settings":  # изменение конфига
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton(
             text=f'Интервал (сек.) = {tools_module.get_config()["time_frame"]}', callback_data="time_frame"))

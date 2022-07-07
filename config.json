@@ -1,6 +1,1 @@
-{
-    "host": "https://fapi.binance.com",
-    "coin_mask": "T",
-    "time_frame": "45",
-    "alert_threshold": "2"
-}
+{"host": "https://fapi.binance.com", "coin_mask": "T", "time_frame": "45", "alert_threshold": "0.5"}

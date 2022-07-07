@@ -1,11 +1,13 @@
+from ast import Break
+import shelve
 import requests
-import json
+
 import time
 import logging
-import os
-import math
 import tools_module
+
 from pprint import pprint
+
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s_%(levelname)s: %(message)s')
 
@@ -93,18 +95,29 @@ def calculate_price_moving(some_coin_list):
             item['price_A'], item['price_B'])
     return some_coin_list
 
+def running_state(is_running=True):
+    return is_running
+
 
 def retry(func):  # Декоратор функции в котором выполняется бесконечный цикл запросов
     def wrappedFunc(*args, **kwargs):
-        while True:
-            logging.debug(f'wrappedFunc: {func.__name__}() called')
+        is_check_coin_running=True
+        while is_check_coin_running==True:
+            with shelve.open('temp/tempData',flag="r") as shelFile:
+                is_check_coin_running=shelFile['is_check_coin_running']
+
+
+            logging.debug(f'{__name__}.is_check_coin_running: {is_check_coin_running}')
+            logging.debug(f'{__name__}.wrappedFunc: {func.__name__}() called')
             func(*args, **kwargs)
             time.sleep(1)
     return wrappedFunc
 
 
+
 @retry
 def update_coin_list(m, bot):  # Обновление котировок в списке объектов Coin_obj
+
     response_data, response_code = check_quotes()
     actual_quotes = coin_filter(response_data, response_code)
 
