@@ -27,3 +27,9 @@ def load_users_from_db():
         user_list=shelFile['users']
     return user_list
 
+def get_users_id_list():
+    users_id_list=[]
+    user_list=load_users_from_db()
+    for user in user_list:
+        users_id_list.append(user.user_id)
+    return users_id_list

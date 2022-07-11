@@ -103,7 +103,7 @@ def retry(func):  # Декоратор функции в котором выпо
     def wrappedFunc(*args, **kwargs):
         is_check_coin_running=True
         while is_check_coin_running==True:
-            with shelve.open('temp/tempData',flag="r") as shelFile:
+            with shelve.open('db',flag="r") as shelFile:
                 is_check_coin_running=shelFile['is_check_coin_running']
 
 

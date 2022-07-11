@@ -3,6 +3,7 @@ import telebot
 from telebot import types
 import coin_module
 import tools_module
+import users_module
 import bot_controls
 import shelve
 logging.basicConfig(level=logging.DEBUG,
@@ -13,16 +14,29 @@ bot = telebot.TeleBot(tools_module.get_token()["something_unimportant"])
 # Добавить команду /stop
 
 
-@bot.message_handler(commands=["start"])
+@bot.message_handler(commands=['start', 'go'])
 def start(m):
-    bot.send_message(m.chat.id,'Вас приветсвует бот для отслеживания котировок!')
-    bot_controls.add_keyboard(m, bot)
+    msg=bot.send_message(m.chat.id, f'Привет,{m.from_user.username}! проверка прав доступа...')
+    logging.debug(f'{__name__}.start() from_user.id={m.from_user.id}, from_user.username={m.from_user.username}')
+    bot.register_next_step_handler(msg, auth(m))
+
+
+def auth(m):
+    users_id_list=users_module.get_users_id_list()
+    if str(m.from_user.id) not in users_id_list:
+        msg=bot.send_message(m.chat.id, f'Пользователю {m.from_user.username} отказано в доступе.')
+        bot.register_next_step_handler(msg, bot_controls.add_start_keyboard(m, bot))
+    else:
+        # а если существует, переходим к следующему шагу
+        msg=bot.send_message(m.chat.id, f'Привет,{m.from_user.username}, вас приветсвует бот для отслеживания котировок!')
+        bot.register_next_step_handler(msg, bot_controls.add_keyboard(m, bot))
+
 
 
 @bot.message_handler(content_types=["text"])
 def check_quotes(m):
     if m.text.strip() == '/run':
-        with shelve.open('temp/tempData',flag="c") as shelFile:
+        with shelve.open('db',flag="c") as shelFile:
             is_check_coin_running=True
             shelFile['is_check_coin_running']=is_check_coin_running
 
@@ -30,7 +44,7 @@ def check_quotes(m):
         coin_module.update_coin_list(m, bot)
     
     elif m.text.strip() =='/stop':
-        with shelve.open('temp/tempData',flag="c") as shelFile:
+        with shelve.open('db',flag="c") as shelFile:
             is_check_coin_running=False
             shelFile['is_check_coin_running']=is_check_coin_running
         
