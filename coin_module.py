@@ -1,7 +1,7 @@
 from ast import Break
 import shelve
 import requests
-
+import os
 import time
 import logging
 import tools_module
@@ -103,7 +103,7 @@ def retry(func):  # Декоратор функции в котором выпо
     def wrappedFunc(*args, **kwargs):
         is_check_coin_running=True
         while is_check_coin_running==True:
-            with shelve.open('db',flag="r") as shelFile:
+            with shelve.open(os.path.abspath('db'),flag="r") as shelFile:
                 is_check_coin_running=shelFile['is_check_coin_running']
 
 

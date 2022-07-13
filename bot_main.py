@@ -8,6 +8,7 @@ import bot_controls
 import shelve
 import time
 import sys
+import os
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s_%(levelname)s: %(message)s')
 
@@ -45,7 +46,7 @@ def auth(message):
 def check_quotes(message):
     logging.debug(f'{__name__}.check_quotes() {message.from_user.username}(user_id:{message.from_user.id}), is private user={private_user}')
     if message.text == '/run' and private_user==True:
-        with shelve.open('db',flag="c") as shelFile:
+        with shelve.open(os.path.abspath('db'),flag="c") as shelFile:
             is_check_coin_running=True
             shelFile['is_check_coin_running']=is_check_coin_running
 
@@ -53,7 +54,7 @@ def check_quotes(message):
         coin_module.update_coin_list(message, bot)
     
     elif message.text == '/stop' and private_user==True:
-        with shelve.open('db',flag="c") as shelFile:
+        with shelve.open(os.path.abspath('db'),flag="c") as shelFile:
             is_check_coin_running=False
             shelFile['is_check_coin_running']=is_check_coin_running
         
