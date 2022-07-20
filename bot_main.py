@@ -9,6 +9,7 @@ import shelve
 import time
 import sys
 import os
+import json
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s_%(levelname)s: %(message)s')
 
@@ -26,72 +27,83 @@ def send_welcome(message):
 
 def auth(message):
     time.sleep(2)
-    global private_user
-    private_user=None
-    user_id = message.from_user.id
-    users_id_list=users_module.get_users_id_list()
-    if str(user_id) in users_id_list:
-        logging.debug(f'{__name__}.auth() is user exist={str(user_id) in users_id_list}')
+    if str(message.from_user.id) in users_module.get_users_id_list():
+        logging.debug(f'{__name__}.auth() is user exist:{str(message.from_user.id) in users_module.get_users_id_list()}')
         msg = bot.reply_to(message, f'Добро пожаловать {message.from_user.username}')
-        bot.register_next_step_handler(msg, check_quotes)
-        private_user=True
-    else:
-        logging.debug(f'{__name__}.auth() is user exist={str(user_id) in users_id_list}')
+
+        users=users_module.load_users_from_db()
+        for user in users:    #Если пользователь имеется в базе данных то передать его объект с настройками дальше по коду
+            if message.from_user.id==user.user_id:
+
+                bot.register_next_step_handler(msg, check_quotes(message))
+                break
+
+    else:    #Если пользователя нет в БД то ничего не делать
+        logging.debug(f'{__name__}.auth() {message.from_user.username} is user exist={str(message.from_user.id) in users_module.get_users_id_list()}')
         bot.reply_to(message, f'{message.from_user.username}, отказано в доступе')
-        private_user=False
+
+
 
 
 
 @bot.message_handler(content_types=['text'])
 def check_quotes(message):
-    logging.debug(f'{__name__}.check_quotes() {message.from_user.username}(user_id:{message.from_user.id}), is private user={private_user}')
-    if message.text == '/run' and private_user==True:
-        with shelve.open(os.path.abspath('db'),flag="c") as shelFile:
-            is_check_coin_running=True
-            shelFile['is_check_coin_running']=is_check_coin_running
+    user_object=users_module.get_user_object(message.from_user.id)
+    logging.debug(f'{__name__}.check_quotes() загружен пользователь {user_object.__dict__}')
+    logging.debug(f'{__name__}.check_quotes() {message.from_user.username}(user_id:{message.from_user.id}), is private user: {str(message.from_user.id)==user_object.user_id}')
 
+    if message.text == '/run' and str(message.from_user.id)==str(user_object.user_id):
+        user_object.set_is_check_coin_running(True)
+        user_object.save_user_config()
         bot.send_message(message.chat.id, 'Бот начал отслеживать котировки')
-        coin_module.update_coin_list(message, bot)
+        coin_module.update_coin_list(message, bot, user_object)
     
-    elif message.text == '/stop' and private_user==True:
-        with shelve.open(os.path.abspath('db'),flag="c") as shelFile:
-            is_check_coin_running=False
-            shelFile['is_check_coin_running']=is_check_coin_running
-        
+    elif message.text == '/stop'and str(message.from_user.id)==str(user_object.user_id):
+        user_object.set_is_check_coin_running(False)
+        user_object.save_user_config()
         bot.send_message(message.chat.id, 'Бот перестал отслеживать котировки')
-        coin_module.running_state(is_running=False)
+        coin_module.running_state(is_running=False)    #Возможно не нужно
     
-    elif message.text == "/settings" and private_user==True:  # изменение конфига
+    elif message.text == "/settings" and str(message.from_user.id)==str(user_object.user_id):    #Блок управления настройками пользователя с помощью клавиатуры
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton(
-            text=f'Интервал (сек.) = {tools_module.get_config()["time_frame"]}', callback_data="time_frame"))
+            text=f'Интервал (сек.) = {user_object.time_frame}', callback_data="time_frame"))
         markup.add(types.InlineKeyboardButton(
-            text=f'Пороговое значение (%) = {tools_module.get_config()["alert_threshold"]}', callback_data="alert_threshold"))
+            text=f'Пороговое значение (%) = {user_object.alert_threshold}', callback_data="alert_threshold"))
         bot.send_message(
             message.chat.id, text="Какие настройки изменить?", reply_markup=markup)
-    elif private_user==False:
+
+    elif str(message.from_user.id) not in str(users_module.get_users_id_list()):
         bot.send_message(
             message.chat.id, text="Доступ запрещен.")
 
 @bot.message_handler(content_types=['text'])
-def set_time_frame(message, setting_name):
-    # Проверка ввода числа
-    some_Value = message.text.lower()
-    if tools_module.get_number(some_Value) == False:
+def set_time_frame(message):
+    
+    user_object=users_module.get_user_object(message.from_user.id)
+    value = message.text.lower()
+
+    if tools_module.get_number(value) == False:    # Проверка ввода числа
         bot.send_message(message.chat.id, 'Ошибка примения настроек!')
+
     else:
-        tools_module.change_config(setting_name, some_Value)
+        logging.debug(f'{__name__}.set_time_frame() получено новое значение time_frame: {value}')
+        user_object.set_time_frame(value)
+        user_object.save_user_config()
         bot.send_message(message.chat.id, f'Настройки сохранены!')
 
 
 @bot.message_handler(content_types=['text'])
-def set_threshold(message, setting_name):
-    # Проверка ввода числа
+def set_threshold(message):
+    user_object=users_module.get_user_object(message.from_user.id)
     some_Value = message.text.lower()
-    if tools_module.get_float_number(some_Value) == False:
+ 
+    if tools_module.get_float_number(some_Value) == False:    # Проверка ввода вещественного числа
         bot.send_message(message.chat.id, 'Ошибка примения настроек!')
+
     else:
-        tools_module.change_config(setting_name, some_Value)
+        user_object.set_alert_threshold(some_Value)
+        user_object.save_user_config()
         bot.send_message(message.chat.id, f'Настройки сохранены!')
 
 
@@ -101,11 +113,11 @@ def query_handler(call):
     if call.data == 'time_frame':
         answer = bot.send_message(
             call.message.chat.id, 'Укажите время в секундах...')
-        bot.register_next_step_handler(answer, set_time_frame, call.data)
+        bot.register_next_step_handler(answer, set_time_frame)
     elif call.data == 'alert_threshold':
         answer = bot.send_message(
             call.message.chat.id, 'Укажите порог в процентах...')
-        bot.register_next_step_handler(answer, set_threshold, call.data)
+        bot.register_next_step_handler(answer, set_threshold)
 
     # Удалить клавиатуру из чата
     bot.edit_message_reply_markup(
@@ -120,7 +132,8 @@ if __name__ == '__main__':
         try:
             bot.polling(none_stop=True)
             user_input = input()
-        except KeyboardInterrupt:    #Без этой строчки код будет выполняться бесконечно при любом количестве ошибок
+        except KeyboardInterrupt as e:    #Без этой строчки код будет выполняться бесконечно при любом количестве ошибок
+            logging.debug(f'Завершение работы c помощью KeyboardInterrupt')
             sys.exit(0)
         except Exception as e:
             time.sleep(3)

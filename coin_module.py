@@ -5,6 +5,7 @@ import os
 import time
 import logging
 import tools_module
+import users_module
 
 from pprint import pprint
 
@@ -40,31 +41,34 @@ class Coin_obj(object):
 
 
 def check_quotes():  # Функция запроса котировок
+
+    host = "https://fapi.binance.com"
     method = '/fapi/v1/ticker/price'
     headers = {'Content-type': 'application/json',
                'Content-Encoding': 'utf-8'}
-    host = tools_module.get_config()["host"]
     logging.debug(f'{__name__}.check_quotes(): host={host}')
+
     try:
         response = requests.get(f'{host}{method}', headers=headers)
-        logging.debug(f'{__name__}.check_quotes() response.url={response.url}')
         response_data, response_code = response.json(), response.status_code
+        logging.debug(f'{__name__}.check_quotes() response.url={response.url} -> response_code: {response_code}')
     except:
         logging.debug(f'{__name__}.check_quotes() error to get response.url')
         response_data, response_code = 'Connection_error', None
     return response_data, response_code
 
 
-def coin_filter(quotes, response_code):  # Фильтр тикеров согласно настройкам в конфиге
-    config=tools_module.get_config()
+def coin_filter(quotes, response_code, user_object):  # Фильтр тикеров согласно настройкам в конфиге
     new_quotes=[]
     if response_code == 200:
         for item in quotes:
-            if item["symbol"][-1:] == config['coin_mask']:
+            if item["symbol"][-1:] == user_object.coin_mask:
                 new_quotes.append(item)
             # Сохраняются данные с примененым фильтром
-        tools_module.save_data(new_quotes, 'response_data.json')
-        logging.debug(f'{__name__}.coin_filter(): OK')
+        
+        with shelve.open(os.path.abspath('temp_db'),flag="c") as temp_db_file:
+            temp_db_file['response_data']=new_quotes
+            logging.debug(f'{__name__}.coin_filter(): OK')
     else:
         logging.debug(f'{__name__}.coin_filter(): FAIL to get response from server, response_code: {response_code}')
     return new_quotes
@@ -79,7 +83,8 @@ def create_new_coin_list(some_coin_list):
     return new_coin_list
 
 
-def check_price(quotes_json_data, coin):  # Возвращает цену и таймштамп переданного тикера
+# Возвращает цену и таймштамп переданного тикера
+def check_price(quotes_json_data, coin):
     for item in quotes_json_data:
         if item['symbol'] == coin:
             price = item['price']
@@ -103,71 +108,83 @@ def retry(func):  # Декоратор функции в котором выпо
     def wrappedFunc(*args, **kwargs):
         is_check_coin_running=True
         while is_check_coin_running==True:
-            with shelve.open(os.path.abspath('db'),flag="r") as shelFile:
-                is_check_coin_running=shelFile['is_check_coin_running']
-
-
             logging.debug(f'{__name__}.is_check_coin_running: {is_check_coin_running}')
             logging.debug(f'{__name__}.wrappedFunc: {func.__name__}() called')
-            func(*args, **kwargs)
+            _,is_check_coin_running=func(*args, **kwargs)
+            logging.debug(f'{__name__}.wrappedFunc: {func.__name__}() return is_check_coin_running: {is_check_coin_running}')
             time.sleep(1)
     return wrappedFunc
 
 
 
 @retry
-def update_coin_list(m, bot):  # Обновление котировок в списке объектов Coin_obj
+def update_coin_list(message, bot, user_object):  # Обновление котировок в списке объектов Coin_obj
+    
+    #Получить актуальный конфиг пользователя
+    user_id=user_object.user_id
+    new_user_object=users_module.get_user_object(user_id)
+    is_check_coin_running=new_user_object.is_check_coin_running
 
-    response_data, response_code = check_quotes()
-    actual_quotes = coin_filter(response_data, response_code)
+    
 
-    # Создать новый список с данными для обработки
-    coin_list = create_new_coin_list(actual_quotes)
-
-    for coin in coin_list:  # Зафиксировать цену вначале таймфрейма
-        coin['price_A'], coin['timestamp_A'] = check_price(
-            actual_quotes, coin['coin_name'])
-
-    # Время ожидания до следующей итерации
-    time.sleep(int(tools_module.get_config()['time_frame']))
-
-    # Получить свежие котировки
-    response_data, response_code = check_quotes()
-    actual_quotes = coin_filter(response_data, response_code)
-
-    # Для проверки того что в новых котировках имеется тикер для сравнения
-    actual_quotes_tikers = []
-    for quote in actual_quotes:
-        actual_quotes_tikers.append(quote["symbol"])
-
-    for coin in coin_list:  # Зафиксировать цену вконце таймфрейма
-        # Проверка на наличие в котировках тикер для сравнения
-        if coin['coin_name'] in actual_quotes_tikers:
-            coin['price_B'], coin['timestamp_B'] = check_price(
-                actual_quotes, coin['coin_name'])
-    tools_module.save_data(coin_list, 'output_data.json')
-
-    coin_list = calculate_price_moving(coin_list)
-    # Подсчитать разницу и сохранить файл
-    tools_module.save_data(coin_list, 'calculated_output_data.json')
-    logging.debug(f'update_coin_list: OK. Coin list updated!')
-
-    alert_list = []
-    for item in coin_list:
-        if abs(item["price_moving"]) > float(tools_module.get_config()["alert_threshold"]):
-            alert_list.append(item)
-            position = None
-            if item["price_moving"] > 0:
-                position = "*LONG*"
-            else:
-                position = "*SHORT*"
-            current_price = round(float(item["price_B"]), 5)
-            price_moving = round(float(item["price_moving"]), 2)
-            message_string = f'*{item["coin_name"]}* = {current_price} ({price_moving}%), {position}'
-            bot.send_message(m.chat.id, message_string, parse_mode="Markdown")
-    if alert_list == []:
+    if is_check_coin_running==False:
         pass
 
-    tools_module.save_data(alert_list, 'alert_list.json')
-    logging.debug(f'update_coin_list: OK. alert_list updated!')
-    return alert_list
+    else:
+        response_data, response_code = check_quotes()
+        actual_quotes = coin_filter(response_data, response_code, new_user_object)
+
+       # Создать новый список с данными для обработки
+        coin_list = create_new_coin_list(actual_quotes)
+
+        for coin in coin_list:  # Зафиксировать цену вначале таймфрейма
+            coin['price_A'], coin['timestamp_A'] = check_price(actual_quotes, coin['coin_name'])
+
+        # Время ожидания до следующей итерации
+        time.sleep(int(new_user_object.time_frame))
+
+        # Получить свежие котировки
+        response_data, response_code = check_quotes()
+        actual_quotes = coin_filter(response_data, response_code, new_user_object)
+
+        # Для проверки того что в новых котировках имеется тикер для сравнения
+        actual_quotes_tikers = []
+        for quote in actual_quotes:
+            actual_quotes_tikers.append(quote["symbol"])
+
+        for coin in coin_list:  # Зафиксировать цену вконце таймфрейма
+            # Проверка на наличие в котировках тикер для сравнения
+            if coin['coin_name'] in actual_quotes_tikers:
+                coin['price_B'], coin['timestamp_B'] = check_price(actual_quotes, coin['coin_name'])
+        #tools_module.save_data(coin_list, 'output_data.json')
+
+        coin_list = calculate_price_moving(coin_list)
+        # Подсчитать разницу и сохранить файл
+        tools_module.save_data(coin_list, 'calculated_output_data.json')
+        logging.debug(f'update_coin_list: OK. Coin list updated!')
+
+        alert_list=[]
+        for item in coin_list:
+            if abs(item["price_moving"]) > float(new_user_object.alert_threshold):
+                alert_list.append(item)
+                
+                position = None
+                 
+                if item["price_moving"] > 0:
+                    position = "*LONG*"
+                else:
+                    position = "*SHORT*"
+                
+                current_price = round(float(item["price_B"]), 5)
+                price_moving = round(float(item["price_moving"]), 2)
+                message_string = f'*{item["coin_name"]}* = {current_price} ({price_moving}%), {position}'
+                bot.send_message(message.chat.id, message_string, parse_mode="Markdown")
+                logging.debug(f'update_coin_list: OK. alert_list updated!')
+        tools_module.save_data(alert_list, 'alert_list.json')    #Для отладки
+        if alert_list == []:
+            pass
+
+        
+        
+
+    return alert_list, is_check_coin_running
