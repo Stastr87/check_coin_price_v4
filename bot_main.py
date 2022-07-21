@@ -25,57 +25,53 @@ def send_welcome(message):
     msg = bot.send_message(message.chat.id, 'Привет! Я отслеживаю котировки монет.')
     bot.register_next_step_handler(msg, auth(message))
 
+#@bot.message_handler(content_types=['text'])
 def auth(message):
     time.sleep(2)
+
     if str(message.from_user.id) in users_module.get_users_id_list():
         logging.debug(f'{__name__}.auth() is user exist:{str(message.from_user.id) in users_module.get_users_id_list()}')
         msg = bot.reply_to(message, f'Добро пожаловать {message.from_user.username}')
 
-        users=users_module.load_users_from_db()
-        for user in users:    #Если пользователь имеется в базе данных то передать его объект с настройками дальше по коду
-            if message.from_user.id==user.user_id:
-
-                bot.register_next_step_handler(msg, check_quotes(message))
-                break
-
     else:    #Если пользователя нет в БД то ничего не делать
-        logging.debug(f'{__name__}.auth() {message.from_user.username} is user exist={str(message.from_user.id) in users_module.get_users_id_list()}')
-        bot.reply_to(message, f'{message.from_user.username}, отказано в доступе')
+        logging.debug(f'{__name__}.auth() is user exist:{str(message.from_user.id) in users_module.get_users_id_list()}')
+        msg = bot.reply_to(message, f'{message.from_user.username}, отказано в доступе')
 
+    
+    bot.register_next_step_handler(msg, main)
+    bot_controls.add_keyboard(message.chat.id, bot)
 
+@bot.message_handler(commands=['run', 'stop','settings'])
+def main(message):
 
-
-
-@bot.message_handler(content_types=['text'])
-def check_quotes(message):
     user_object=users_module.get_user_object(message.from_user.id)
-    logging.debug(f'{__name__}.check_quotes() загружен пользователь {user_object.__dict__}')
-    logging.debug(f'{__name__}.check_quotes() {message.from_user.username}(user_id:{message.from_user.id}), is private user: {str(message.from_user.id)==user_object.user_id}')
-
-    if message.text == '/run' and str(message.from_user.id)==str(user_object.user_id):
+    logging.debug(f'{__name__}.main() загружен пользователь {user_object.__dict__}')
+    current_user_id=str(message.from_user.id)
+    logging.debug(f'{__name__}.main() message from: {current_user_id}, {type(current_user_id)}')
+    msg=' '
+    if message.text == '/run' and current_user_id==user_object.user_id:
         user_object.set_is_check_coin_running(True)
         user_object.save_user_config()
-        bot.send_message(message.chat.id, 'Бот начал отслеживать котировки')
         coin_module.update_coin_list(message, bot, user_object)
-    
-    elif message.text == '/stop'and str(message.from_user.id)==str(user_object.user_id):
+        msg='Запущено отслеживание котировок'
+
+    elif message.text == '/stop'and current_user_id==user_object.user_id:
         user_object.set_is_check_coin_running(False)
         user_object.save_user_config()
-        bot.send_message(message.chat.id, 'Бот перестал отслеживать котировки')
-        coin_module.running_state(is_running=False)    #Возможно не нужно
+        msg='Бот перестал отслеживать котировки'
     
-    elif message.text == "/settings" and str(message.from_user.id)==str(user_object.user_id):    #Блок управления настройками пользователя с помощью клавиатуры
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton(
-            text=f'Интервал (сек.) = {user_object.time_frame}', callback_data="time_frame"))
-        markup.add(types.InlineKeyboardButton(
-            text=f'Пороговое значение (%) = {user_object.alert_threshold}', callback_data="alert_threshold"))
-        bot.send_message(
-            message.chat.id, text="Какие настройки изменить?", reply_markup=markup)
+    elif message.text == "/settings" and current_user_id==user_object.user_id:    #Блок управления настройками пользователя с помощью клавиатуры
+        bot_controls.add_inline_keyboard(message,bot,user_object)
 
-    elif str(message.from_user.id) not in str(users_module.get_users_id_list()):
-        bot.send_message(
-            message.chat.id, text="Доступ запрещен.")
+    elif current_user_id not in users_module.get_users_id_list():
+        msg='Доступ запрещен!'
+
+    logging.debug(f'{__name__}.main() {type(bot)}')
+    logging.debug(f'{__name__}.main() MARK1')
+    logging.debug(f'{__name__}.main() message.chat.id:{message.chat.id}')
+    logging.debug(f'{__name__}.main() bot:{bot}')
+    bot.send_message(message.chat.id, msg)
+    logging.debug(f'{__name__}.main() MARK2')
 
 @bot.message_handler(content_types=['text'])
 def set_time_frame(message):
