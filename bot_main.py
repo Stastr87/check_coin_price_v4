@@ -31,46 +31,58 @@ def auth(message):
 
     if str(message.from_user.id) in users_module.get_users_id_list():
         logging.debug(f'{__name__}.auth() is user exist:{str(message.from_user.id) in users_module.get_users_id_list()}')
+
+        keyboard_msg='/settings-изменить параметры наблюдателя\n/run-запустить наблюдателя\n/stop-остановить наблюдателя'
+        bot_controls.add_keyboard(message.chat.id, bot, keyboard_msg)
+
         msg = bot.reply_to(message, f'Добро пожаловать {message.from_user.username}')
+
 
     else:    #Если пользователя нет в БД то ничего не делать
         logging.debug(f'{__name__}.auth() is user exist:{str(message.from_user.id) in users_module.get_users_id_list()}')
         msg = bot.reply_to(message, f'{message.from_user.username}, отказано в доступе')
 
-    
     bot.register_next_step_handler(msg, main)
-    bot_controls.add_keyboard(message.chat.id, bot)
+
 
 @bot.message_handler(commands=['run', 'stop','settings'])
 def main(message):
+
+
 
     user_object=users_module.get_user_object(message.from_user.id)
     logging.debug(f'{__name__}.main() загружен пользователь {user_object.__dict__}')
     current_user_id=str(message.from_user.id)
     logging.debug(f'{__name__}.main() message from: {current_user_id}, {type(current_user_id)}')
-    msg=' '
+    reply_msg=''
     if message.text == '/run' and current_user_id==user_object.user_id:
         user_object.set_is_check_coin_running(True)
         user_object.save_user_config()
+        reply_msg='Запущено отслеживание котировок'
+        bot_controls.add_keyboard(message.chat.id, bot, reply_msg)
         coin_module.update_coin_list(message, bot, user_object)
-        msg='Запущено отслеживание котировок'
+
 
     elif message.text == '/stop'and current_user_id==user_object.user_id:
         user_object.set_is_check_coin_running(False)
         user_object.save_user_config()
-        msg='Бот перестал отслеживать котировки'
+        reply_msg='Бот перестал отслеживать котировки'
+        bot_controls.add_keyboard(message.chat.id, bot, reply_msg)
     
     elif message.text == "/settings" and current_user_id==user_object.user_id:    #Блок управления настройками пользователя с помощью клавиатуры
         bot_controls.add_inline_keyboard(message,bot,user_object)
-
+        
     elif current_user_id not in users_module.get_users_id_list():
-        msg='Доступ запрещен!'
+        reply_msg='Доступ запрещен!'
+        bot_controls.add_start_keyboard(message.chat.id, bot, reply_msg)
+
 
     logging.debug(f'{__name__}.main() {type(bot)}')
     logging.debug(f'{__name__}.main() MARK1')
     logging.debug(f'{__name__}.main() message.chat.id:{message.chat.id}')
     logging.debug(f'{__name__}.main() bot:{bot}')
-    bot.send_message(message.chat.id, msg)
+ 
+
     logging.debug(f'{__name__}.main() MARK2')
 
 @bot.message_handler(content_types=['text'])
