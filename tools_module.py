@@ -1,8 +1,7 @@
 import json
 import logging
 import os
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s_%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.DEBUG,format='%(asctime)s_%(levelname)s: %(message)s')
 
 
 def get_config():

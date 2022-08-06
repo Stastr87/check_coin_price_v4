@@ -5,8 +5,7 @@ import json
 import os
 
 from matplotlib import rc_params_from_file
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s_%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO,format='%(asctime)s_%(levelname)s: %(message)s')
 
 class User_obj(object):
     def __init__(self, user_id, **settings):

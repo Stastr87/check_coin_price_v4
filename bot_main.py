@@ -1,7 +1,7 @@
-import logging
+
 import telebot
 from telebot import types
-import coin_module
+import coin_module_v2 
 import tools_module
 import users_module
 import bot_controls
@@ -10,8 +10,9 @@ import time
 import sys
 import os
 import json
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s_%(levelname)s: %(message)s')
+
+import logging
+logging.basicConfig(level=logging.DEBUG,format='%(asctime)s-%(levelname)s - %(message)s')
 
 bot = telebot.TeleBot(tools_module.get_token()["something_unimportant"])
 
@@ -60,7 +61,7 @@ def main(message):
         user_object.save_user_config()
         reply_msg='Запущено отслеживание котировок'
         bot_controls.add_keyboard(message.chat.id, bot, reply_msg)
-        coin_module.update_coin_list(message, bot, user_object)
+        coin_module_v2.update_coin_list(message, bot, user_object)
 
 
     elif message.text == '/stop'and current_user_id==user_object.user_id:
@@ -141,8 +142,8 @@ if __name__ == '__main__':
             bot.polling(none_stop=True)
             user_input = input()
         except KeyboardInterrupt as e:    #Без этой строчки код будет выполняться бесконечно при любом количестве ошибок
-            logging.debug(f'Завершение работы c помощью KeyboardInterrupt')
+            logging.info(f'Завершение работы c помощью KeyboardInterrupt')
             sys.exit(0)
-        except Exception as e:
-            time.sleep(3)
-            logging.debug(f'ERROR: {e}')
+#        except Exception as e:
+#            time.sleep(3)
+#            logging.debug(f'ERROR: {e}')

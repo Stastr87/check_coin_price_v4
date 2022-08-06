@@ -3,8 +3,7 @@ import users_module
 import shelve
 import os
 from pprint import pprint
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s_%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.DEBUG,format='%(asctime)s-%(levelname)s - %(message)s')
 
 
 with shelve.open(os.path.abspath('db'),flag="c") as shelFile:

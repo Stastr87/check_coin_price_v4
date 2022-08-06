@@ -3,14 +3,14 @@ import shelve
 import requests
 import os
 import time
-import logging
+
 import tools_module
 import users_module
-
+import pandas as pd
 from pprint import pprint
 
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s_%(levelname)s: %(message)s')
+import logging
+logging.basicConfig(level=logging.DEBUG,format='%(asctime)s-%(levelname)s - %(message)s')
 
 
 class Coin_obj(object):
@@ -38,6 +38,28 @@ class Coin_obj(object):
         data['timestamp_B'] = self.timestamp_B
         data['price_moving'] = self.price_moving
         return data
+
+class Coin_obj_v2(object):
+    def __init__(self, coin_name=None, price_matrix=None):
+        self.coin_name=coin_name
+        self.price_matrix=price_matrix
+    
+    def price_matrix(self):
+        df=pd.DataFrame(columns=['timestamp','price'],index=[])
+        self.price_matrix=df
+        return self
+
+    def update_price_matrix(self, price, time_stmp):
+        self.price_matrix=self.price_matrix.append(pd.DataFrame({'timestamp':time_stmp},{'price':price}))
+        return self
+
+    def get_price_moving(self):
+        #Тут должна быть формула, которая возвращает процент изменения максимальной и минимальной цены, последнюю актуальную цену
+        pass
+
+
+
+
 
 
 def check_quotes():  # Функция запроса котировок
@@ -124,9 +146,7 @@ def update_coin_list(message, bot, user_object):  # Обновление кот�
     user_id=user_object.user_id
     new_user_object=users_module.get_user_object(user_id)
     is_check_coin_running=new_user_object.is_check_coin_running
-
     
-
     if is_check_coin_running==False:
         pass
 
