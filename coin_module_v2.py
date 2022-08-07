@@ -3,6 +3,7 @@ import shelve
 import requests
 import os
 import time
+from datetime import datetime
 import logging
 import tools_module
 import users_module
@@ -41,7 +42,7 @@ def save_coin_obj(coin_obj):
     with shelve.open('coin_db') as shelve_file:
         coin_name=coin_obj.coin_name
         shelve_file[coin_name]=coin_obj
-        logging.debug(f'{__name__}.save_coin_obj() coin_name {coin_name} saved to DB')
+        
 
 def load_coin_obj(coin_name):
     with shelve.open('coin_db') as shelve_file:
@@ -84,7 +85,7 @@ def update_coin_list_v2(some_coin_list):
         coin_name=item['symbol']
         #По названию монеты загружаются данные из БД
         coin_obj=load_coin_obj(coin_name)
-        logging.debug(f'{__name__}.update_coin_list_v2() coin_name {coin_obj.coin_name} loaded...')
+        
         #Дополняются новыми данными
         coin_obj.update_price_matrix(item['price'], item['time'])
         #Обновленные данные сохраняются в БД
@@ -121,40 +122,41 @@ def get_alert_list(alert_threshold):
     with shelve.open('coin_db') as shelve_file:
         klist = list(shelve_file.keys())
 
-#s = pd.Series([4, 2, 0, 8], name='legs', index=idx)
-
-
     for coin_name in klist:
         coin=load_coin_obj(coin_name)
-        #ТУТ НЕОБХОДИМО СДЕЛАТЬ ВЫБОРКУ ДАННЫХ с минимальной/максимальной ценой и их выборками
         df=coin.price_matrix
-        logging.debug(f'{__name__}.get_alert_list(): df= {df}')
 
-
-        logging.debug(f'{__name__}.get_alert_list():{coin.coin_name} df.max()["price"]= {df.max()["price"]}')
+        #logging.debug(f'{__name__}.get_alert_list():{coin.coin_name} df.max()["price"]= {df.max()["price"]}')
         max=df.max()["price"]
         min=df.min()["price"]
+        raw_open=df["price"].head(1)
+        open=raw_open[0]
+        raw_close=df["price"].tail(1)
+        close=raw_close[len(df)-1]
         diff=float(max)-float(min)
         diff_percent=(diff/float(max))*100
-        logging.debug(f'{__name__}.get_alert_list():{coin.coin_name} diff_percent= {diff_percent}')
+
+        logging.debug(f'{__name__}.get_alert_list():{coin.coin_name} diff_percent= {diff_percent}, open= {open}, close= {close}')
 
         if diff_percent>=float(alert_threshold):
-            ts_max=df.max()["timestamp"]
-            ts_min=df.min()["timestamp"]
+
             #Если timestamp максимума больше минимума
-            if ts_max > ts_min:
+            if open < close:
+                position = "*SHORT*"
                 #Цена выросла и считаем позицию LONG
-                position = "*LONG*"
+            elif open==close:
+                #Цена упала и считаем позицию SHORT
+                position = "*FLAT*"
             else:
                 #Цена упала и считаем позицию SHORT
-                position = "*SHORT*"
+                position = "*LONG*"
             #Создаем временный атрибуты объекта coin_obj 
             coin.price_moving=diff_percent
             coin.position=position
             #Сохраним данные в списке
             logging.debug(f'{__name__}.get_alert_list():  coin.position= {coin.position}')
             alert_list.append(coin)
-        logging.debug(f'{__name__}.get_alert_list():  alert_list= {alert_list}')
+    logging.debug(f'{__name__}.get_alert_list():  len(alert_list)= {len(alert_list)}')
     return alert_list
 
 def running_state(is_running=True):
