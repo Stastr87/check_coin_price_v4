@@ -142,13 +142,13 @@ def get_alert_list(alert_threshold):
 
             #Если цена закрытия таймфрейма больше цены открытия, то LONG
             if open < close:
-                position = "*LONG*"
+                position = "LONG"
             #Цена не изменилась считаем FLAT
             elif open==close:
-                position = "*FLAT*"
+                position = "FLAT"
             #Цена упала и считаем позицию SHORT
             else:
-                position = "*SHORT*"
+                position = "SHORT"
             #Создаем временный атрибуты объекта coin_obj 
             coin.price_moving=diff_percent
             coin.position=position
@@ -158,8 +158,19 @@ def get_alert_list(alert_threshold):
     logging.debug(f'{__name__}.get_alert_list():  len(alert_list)= {len(alert_list)}')
     return alert_list
 
-def running_state(is_running=True):
-    return is_running
+def clear_coin_db():
+    with shelve.open('coin_db', flag="w") as shelve_file:
+        shelve_file.clear()
+        klist = list(shelve_file.keys())
+    logging.debug(f'{__name__}.clear_coin_db():  klist= {klist}')
+
+def delete_coin_db():
+    file_name='coin_db'
+    if os.path.isfile(file_name): 
+        os.remove(file_name) 
+        logging.debug(f'success removing file {file_name}') 
+    else: 
+        logging.debug("File doesn't exists!")
 
 
 def retry(func):  # Декоратор функции в котором выполняется бесконечный цикл запросов
@@ -177,7 +188,9 @@ def retry(func):  # Декоратор функции в котором выпо
 
 @retry
 def update_coin_list(message, bot, user_object):  # Обновление котировок в списке объектов Coin_obj
-    
+    #Очистить БД в начале процесса формирования сигналов
+    delete_coin_db()
+
     #Получить актуальный конфиг пользователя
     user_id=user_object.user_id
     new_user_object=users_module.get_user_object(user_id)
@@ -218,7 +231,10 @@ def update_coin_list(message, bot, user_object):  # Обновление кот�
         current_price = round(float(df.tail(1)), 5)
         price_moving = round(float(coin.price_moving), 2)
         position=coin.position
-        message_string = f'*{coin.coin_name}* = {current_price} ({price_moving}%), {position}'
+        if position=='SHORT':
+            message_string = f"*{coin.coin_name}* (mov: -{price_moving}%),\n \U0001F4C9 *{position}*, close={current_price}"
+        else:
+            message_string = f"*{coin.coin_name}* (mov: {price_moving}%),\n \U0001F4C8 *{position}*, close={current_price}"
         bot.send_message(message.chat.id, message_string, parse_mode="Markdown")
 
     return alert_list, is_check_coin_running
