@@ -140,16 +140,15 @@ def get_alert_list(alert_threshold):
 
         if diff_percent>=float(alert_threshold):
 
-            #Если timestamp максимума больше минимума
+            #Если цена закрытия таймфрейма больше цены открытия, то LONG
             if open < close:
-                position = "*SHORT*"
-                #Цена выросла и считаем позицию LONG
-            elif open==close:
-                #Цена упала и считаем позицию SHORT
-                position = "*FLAT*"
-            else:
-                #Цена упала и считаем позицию SHORT
                 position = "*LONG*"
+            #Цена не изменилась считаем FLAT
+            elif open==close:
+                position = "*FLAT*"
+            #Цена упала и считаем позицию SHORT
+            else:
+                position = "*SHORT*"
             #Создаем временный атрибуты объекта coin_obj 
             coin.price_moving=diff_percent
             coin.position=position
